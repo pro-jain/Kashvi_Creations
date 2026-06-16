@@ -1,15 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import video1 from "../assets/video1.mp4";
 import v2 from "../assets/v2.mp4";
-import v3 from "../assets/v3.mp4";
-import v4 from "../assets/v4.mp4";
-import v5 from "../assets/v5.mp4";
-import v6 from "../assets/v6.mp4";
-import v7 from "../assets/v7.mp4";
-import v8 from "../assets/v8.mp4";
-import v9 from "../assets/v9.mp4";
-import v10 from "../assets/v10.mp4";
-import v11 from "../assets/v11.mp4";
 
 const Reel = () => {
     const videoRefs = useRef([]);
@@ -83,15 +74,7 @@ const Reel = () => {
     const videoData = [
         { src: video1 },  
         { src: v2 },      
-        { src: v3 },      
-        { src: v4 },      
-        { src: v5 }, 
-        { src: v6 }, 
-        { src: v7 }, 
-        { src: v8 }, 
-        { src: v9 },
-        { src: v10 },  
-        { src: v11 }, 
+    
     ];
 
     return (
