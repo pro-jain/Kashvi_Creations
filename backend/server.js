@@ -30,8 +30,8 @@ connectDB();
 // Middleware
 app.use(bodyParser.json());
 const defaultOrigins = [
-  "https://kc-frontend.vercel.app",
-  "https://kashvi-creations-ruby.vercel.app/",
+  "https://kashvi-creations-mvli.vercel.app",
+  "https://kashvi-creations-ruby.vercel.app",
   "http://localhost:5173",
 ];
 const allowedOrigins = process.env.ALLOWED_ORIGINS
