@@ -29,9 +29,18 @@ connectDB();
 
 // Middleware
 app.use(bodyParser.json());
+const defaultOrigins = [
+  "https://kc-frontend.vercel.app",
+  "https://kc-admin-one.vercel.app",
+  "http://localhost:5173",
+];
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : defaultOrigins;
+
 app.use(
   cors({
-    origin: ["https://kc-frontend.vercel.app", "https://kc-admin-one.vercel.app","http://localhost:5173"],
+    origin: allowedOrigins,
     credentials: true,
   })
 );
@@ -49,36 +58,49 @@ app.get("/", (req, res) => {
   res.send("Hello world from Server");
 });
 
-// Initialize Kafka and start server
-const startServer = async () => {
-  try {
-   const kafkaEnabled = process.env.ENABLE_KAFKA === "true";
-
-if (kafkaEnabled) {
-    await initProducer();
-    await initConsumer();
-    console.log("Kafka Enabled");
-} else {
-    console.log("Kafka Disabled");
-}
-
-    // Start server
-    app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
-      console.log("Kafka Producer and Consumer initialized");
-    });
-
-    // Graceful shutdown
-    process.on("SIGINT", async () => {
-      console.log("Shutting down gracefully...");
-      await disconnectProducer();
-      await disconnectConsumer();
-      process.exit(0);
-    });
-  } catch (error) {
-    console.error("Failed to start server:", error);
-    process.exit(1);
+// Kafka init (no-op when ENABLE_KAFKA !== "true", handled inside these functions)
+const kafkaEnabled = process.env.ENABLE_KAFKA === "true";
+let kafkaInitPromise = null;
+const ensureKafka = () => {
+  if (!kafkaInitPromise) {
+    kafkaInitPromise = (async () => {
+      if (kafkaEnabled) {
+        await initProducer();
+        await initConsumer();
+        console.log("Kafka Enabled");
+      } else {
+        console.log("Kafka Disabled");
+      }
+    })();
   }
+  return kafkaInitPromise;
 };
 
-startServer();
+// On Vercel, each invocation reuses the warm module scope, so kick this off
+// immediately (don't block the handler on it — Kafka failures shouldn't 500 requests).
+ensureKafka().catch((err) => console.error("Kafka init failed:", err));
+
+const isVercel = process.env.VERCEL === "1";
+
+if (!isVercel) {
+  // Local / traditional Node hosting: run a normal long-lived server.
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
+
+  // Graceful shutdown only makes sense for a long-lived process.
+  process.on("SIGINT", async () => {
+    console.log("Shutting down gracefully...");
+    if (kafkaEnabled) {
+      await disconnectProducer();
+      await disconnectConsumer();
+    }
+    process.exit(0);
+  });
+}
+
+// Vercel's @vercel/node runtime imports this file and calls the default
+// export as a request handler for every invocation — it must NOT call
+// app.listen(). Exporting `app` (an Express app is a valid (req,res) handler)
+// covers that case.
+export default app;
