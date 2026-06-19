@@ -21,6 +21,11 @@ const processWithRetry = async (handler, data, retries = 3) => {
 };
 
 export const initConsumer = async () => {
+
+  if(process.env.ENABLE_KAFKA !== "true"){
+      console.log("Kafka Consumer Disabled");
+      return;
+  }
   try {
     await consumer.connect();
     console.log("Kafka Consumer connected");
@@ -68,6 +73,10 @@ export const initConsumer = async () => {
 };
 
 export const disconnectConsumer = async () => {
+
+  if(process.env.ENABLE_KAFKA !== "true")
+      return;
+
   await consumer.disconnect();
   console.log("Kafka Consumer disconnected");
 };
