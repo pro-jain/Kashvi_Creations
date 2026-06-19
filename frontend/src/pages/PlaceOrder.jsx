@@ -4,11 +4,11 @@ import Title from '../components/Title';
 import CartTotal from '../components/CartTotal';
 import razorpayLogo from '../assets/razorpay_logo.png';
 
+
+const PlaceOrder = () => {
 const [savedAddresses, setSavedAddresses] = useState([]);
 const [selectedAddressId, setSelectedAddressId] = useState(null);
 const [saveAddress, setSaveAddressFlag] = useState(false);
-
-const PlaceOrder = () => {
   const [method, setMethod] = useState('cod');
   const navigate = useNavigate();
 
