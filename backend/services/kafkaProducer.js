@@ -8,13 +8,13 @@ const producer = kafka.producer({
 
 // Initialize producer
 export const initProducer = async () => {
-  try {
+ 
+
+    if(process.env.ENABLE_KAFKA !== "true")
+        return;
+
     await producer.connect();
-    console.log("Kafka Producer connected");
-  } catch (error) {
-    console.error("Failed to connect Kafka Producer:", error);
-    throw error;
-  }
+
 };
 
 // Publish events
