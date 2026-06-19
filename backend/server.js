@@ -52,11 +52,15 @@ app.get("/", (req, res) => {
 // Initialize Kafka and start server
 const startServer = async () => {
   try {
-    // Initialize Kafka Producer
-    await initProducer();
+   const kafkaEnabled = process.env.ENABLE_KAFKA === "true";
 
-    // Initialize Kafka Consumer
+if (kafkaEnabled) {
+    await initProducer();
     await initConsumer();
+    console.log("Kafka Enabled");
+} else {
+    console.log("Kafka Disabled");
+}
 
     // Start server
     app.listen(port, () => {
