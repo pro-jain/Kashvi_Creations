@@ -18,21 +18,26 @@ export const initProducer = async () => {
 };
 
 // Publish events
+const kafkaEnabled = process.env.ENABLE_KAFKA === "true";
+
 export const publishEvent = async (topic, events) => {
-  try {
-    await producer.send({
-      topic,
-      messages: events.map((event) => ({
-        key: event.key || null,
-        value: JSON.stringify(event.value),
-        headers: event.headers || {},
-      })),
-    });
-    console.log(`Event published to ${topic}`);
-  } catch (error) {
-    console.error(`Error publishing to ${topic}:`, error);
-    throw error;
-  }
+    if (!kafkaEnabled) {
+        console.log(`Kafka disabled. Skipping ${topic}`);
+        return;
+    }
+
+    try {
+        await producer.send({
+            topic,
+            messages: events.map((event) => ({
+                key: event.key || null,
+                value: JSON.stringify(event.value),
+                headers: event.headers || {},
+            })),
+        });
+    } catch (error) {
+        console.error(error);
+    }
 };
 
 // Disconnect producer
