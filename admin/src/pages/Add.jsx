@@ -1,262 +1,246 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { assets } from '../assets/assets';
-import { useState } from 'react';
 import axios from 'axios';
 import { backendUrl } from '../App';
-import { toast } from "react-toastify";
+import { toast } from 'react-toastify';
 
 const Add = ({ token }) => {
+  const [images, setImages] = useState([null, null, null, null]);
+  const [uploadedUrls, setUploadedUrls] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadDone, setUploadDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Image states
-  const [image1, setImage1] = useState(false);
-  const [image2, setImage2] = useState(false);
-  const [image3, setImage3] = useState(false);
-  const [image4, setImage4] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState(false);
-
-  // Product data states
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
-  const [category, setCategory] = useState("Women");
-  const [subCategory, setSubCategory] = useState("Topwear");
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [price, setPrice] = useState('');
+  const [category, setCategory] = useState('Women');
+  const [subCategory, setSubCategory] = useState('Topwear');
   const [bestseller, setBestseller] = useState(false);
-  const [colors, setColors] = useState("");
-  const [stock, setStock] = useState({
-    S: 10,
-    M: 10,
-    L: 10,
-    XL: 10,
-    XXL: 10
-  });
+  const [colors, setColors] = useState('');
+  const [stock, setStock] = useState({ S: 10, M: 10, L: 10, XL: 10, XXL: 10 });
 
-  // Handle image selection and upload to Vercel Blob
-  const handleImageChange = async (e, setImageFunction, imageKey) => {
+  const handleImageChange = (e, index) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    // Set local preview
-    setImageFunction(file);
-
-    // Show preview
-    const preview = URL.createObjectURL(file);
-    console.log(`Image ${imageKey} preview ready`);
+    const newImages = [...images];
+    newImages[index] = file;
+    setImages(newImages);
+    // Reset upload state when new image selected
+    setUploadDone(false);
+    setUploadedUrls([]);
   };
 
-  // Upload images to Vercel Blob before submitting
-  const uploadImagesToBlob = async () => {
-    const images = [image1, image2, image3, image4].filter(img => img);
+  const handleStockChange = (size, value) => {
+    setStock(prev => ({ ...prev, [size]: parseInt(value) || 0 }));
+  };
 
-    if (images.length === 0) {
-      toast.error("Please select at least one image");
-      return null;
+  // Step 1: Upload images to Vercel Blob via backend /api/upload
+  const uploadImages = async () => {
+    const selectedImages = images.filter(Boolean);
+    if (selectedImages.length === 0) {
+      toast.error('Please select at least one image');
+      return false;
     }
-
-    setUploadingImages(true);
-
+    setUploading(true);
     try {
       const formData = new FormData();
-      images.forEach((image, index) => {
-        formData.append(`image${index + 1}`, image);
+      selectedImages.forEach((img, i) => formData.append(`image${i + 1}`, img));
+
+      const res = await axios.post(`${backendUrl}/api/upload`, formData, {
+        headers: { token, 'Content-Type': 'multipart/form-data' },
       });
 
-      const response = await axios.post(
-        `${backendUrl}/api/upload`,
-        formData,
-        {
-          headers: {
-            token,
-            "Content-Type": "multipart/form-data"
-          }
-        }
-      );
-
-      if (response.data.success) {
-        toast.success(`${images.length} image(s) uploaded successfully`);
-        setUploadingImages(false);
-        return response.data.urls; // Returns array of URLs from Vercel Blob
+      if (res.data.success) {
+        setUploadedUrls(res.data.urls);
+        setUploadDone(true);
+        toast.success(`${res.data.urls.length} image(s) uploaded to Vercel Blob ✓`);
+        return true;
       } else {
-        toast.error(response.data.message);
-        setUploadingImages(false);
-        return null;
+        toast.error(res.data.message || 'Upload failed');
+        return false;
       }
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.error(`Failed to upload images: ${error.message}`);
-      setUploadingImages(false);
-      return null;
+    } catch (err) {
+      toast.error('Upload failed: ' + err.message);
+      return false;
+    } finally {
+      setUploading(false);
     }
   };
 
-  // Handle stock change
-  const handleStockChange = (value) => {
-    setStock(prev => ({
-      ...prev,
-      S: parseInt(value) || 0
-    }));
-  };
-
-  // Handle form submission
+  // Step 2: Submit product with already-uploaded Blob URLs stored in MongoDB
   const onSubmitHandler = async (e) => {
     e.preventDefault();
-
-    if (uploadingImages) {
-      toast.error("Please wait for images to upload");
+    if (!uploadDone || uploadedUrls.length === 0) {
+      toast.error('Please upload images first');
+      return;
+    }
+    if (!price || Number(price) <= 0) {
+      toast.error('Enter a valid price');
       return;
     }
 
-    if (!price || price <= 0) {
-      toast.error("Please enter a valid price");
-      return;
-    }
-
+    setSubmitting(true);
     try {
-      // Upload images to Vercel Blob first
-      const imageUrls = await uploadImagesToBlob();
-      if (!imageUrls) {
-        return; // Upload failed
-      }
-
-      // Create form data with image URLs
       const formData = new FormData();
-      formData.append("name", name);
-      formData.append("description", description);
-      formData.append("price", price);
-      formData.append("category", category);
-      formData.append("subCategory", subCategory);
-      formData.append("bestseller", bestseller);
-      formData.append("colors", colors);
-      formData.append("stock", JSON.stringify(stock));
+      formData.append('name', name);
+      formData.append('description', description);
+      formData.append('price', price);
+      formData.append('category', category);
+      formData.append('subCategory', subCategory);
+      formData.append('bestseller', bestseller);
+      formData.append('colors', colors);
+      formData.append('stock', JSON.stringify(stock));
+      // Send Vercel Blob URLs — backend stores these in MongoDB images[]
+      uploadedUrls.forEach((url, i) => formData.append(`imageUrl${i + 1}`, url));
 
-      // Append image URLs instead of files
-      imageUrls.forEach((url, index) => {
-        formData.append(`imageUrl${index + 1}`, url);
+      const res = await axios.post(`${backendUrl}/api/product/add`, formData, {
+        headers: { token },
       });
 
-      // Send to backend
-      const response = await axios.post(
-        `${backendUrl}/api/product/add`,
-        formData,
-        { headers: { token } }
-      );
-
-      if (response.data.success) {
-        toast.success(response.data.message);
-
+      if (res.data.success) {
+        toast.success('Product added successfully!');
         // Reset form
-        setName('');
-        setDescription('');
-        setPrice('');
-        setImage1(false);
-        setImage2(false);
-        setImage3(false);
-        setImage4(false);
-        setCategory('Women');
-        setSubCategory('Topwear');
-        setBestseller(false);
-        setColors('');
+        setName(''); setDescription(''); setPrice('');
+        setImages([null, null, null, null]);
+        setUploadedUrls([]); setUploadDone(false);
+        setCategory('Women'); setSubCategory('Topwear');
+        setBestseller(false); setColors('');
         setStock({ S: 10, M: 10, L: 10, XL: 10, XXL: 10 });
       } else {
-        toast.error(response.data.message);
+        toast.error(res.data.message);
       }
-    } catch (error) {
-      console.error("Error:", error);
-      toast.error(error.message || "Failed to add product");
+    } catch (err) {
+      toast.error(err.message || 'Failed to add product');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={onSubmitHandler} className='flex flex-col w-full items-start gap-3'>
-      {/* Image Upload Section */}
-      <div>
-        <p className='mb-2 font-semibold'>Upload Images (to Vercel Blob)</p>
-        <div className='flex gap-2'>
-          {[
-            { state: image1, setter: setImage1, id: 'image1', key: 1 },
-            { state: image2, setter: setImage2, id: 'image2', key: 2 },
-            { state: image3, setter: setImage3, id: 'image3', key: 3 },
-            { state: image4, setter: setImage4, id: 'image4', key: 4 }
-          ].map((img) => (
-            <label key={img.id} className='cursor-pointer'>
-              <img
-                className='w-20 h-20 object-cover border-2 border-gray-300 rounded'
-                src={!img.state ? assets.upload_area : URL.createObjectURL(img.state)}
-                alt={`preview-${img.key}`}
-              />
+    <form onSubmit={onSubmitHandler} className="flex flex-col w-full items-start gap-5">
+      <h2 className="text-xl font-semibold text-gray-800">Add New Product</h2>
+
+      {/* ── IMAGE UPLOAD ── */}
+      <div className="w-full">
+        <p className="mb-2 font-medium text-gray-700">Product Images</p>
+        <div className="flex gap-3 flex-wrap">
+          {images.map((img, index) => (
+            <label key={index} className="cursor-pointer relative group">
+              <div className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden flex items-center justify-center bg-gray-50 hover:border-black transition-colors">
+                {img ? (
+                  <img
+                    src={URL.createObjectURL(img)}
+                    alt={`preview-${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <img src={assets.upload_area} alt="upload" className="w-10 h-10 opacity-40" />
+                )}
+                {uploadDone && img && (
+                  <div className="absolute inset-0 bg-green-500 bg-opacity-20 flex items-center justify-center">
+                    <span className="text-green-700 text-xl font-bold">✓</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-center text-gray-400 mt-1">Image {index + 1}</p>
               <input
-                onChange={(e) => handleImageChange(e, img.setter, img.key)}
                 type="file"
-                id={img.id}
-                hidden
                 accept="image/*"
+                hidden
+                onChange={(e) => handleImageChange(e, index)}
               />
             </label>
           ))}
         </div>
-        <p className='text-sm text-gray-500 mt-2'>✨ Images will be uploaded to Vercel Blob</p>
+
+        {/* Upload to Blob button */}
+        <button
+          type="button"
+          onClick={uploadImages}
+          disabled={uploading || uploadDone}
+          className={`mt-3 px-5 py-2 rounded text-sm font-medium transition-colors ${
+            uploadDone
+              ? 'bg-green-100 text-green-700 border border-green-300 cursor-default'
+              : uploading
+              ? 'bg-gray-200 text-gray-500 cursor-wait'
+              : 'bg-gray-900 text-white hover:bg-gray-700'
+          }`}
+        >
+          {uploadDone
+            ? `✓ ${uploadedUrls.length} image(s) uploaded to Vercel Blob`
+            : uploading
+            ? 'Uploading…'
+            : 'Upload Images to Vercel Blob'}
+        </button>
+        {uploadDone && (
+          <p className="text-xs text-gray-400 mt-1">
+            URLs saved — they'll be linked to this product in MongoDB on submit.
+          </p>
+        )}
       </div>
 
-      {/* Product Name */}
-      <div className='w-full'>
-        <p className='mb-2'>Product Name *</p>
+      {/* ── NAME ── */}
+      <div className="w-full">
+        <p className="mb-1 font-medium text-gray-700">Product Name <span className="text-red-500">*</span></p>
         <input
-          onChange={(e) => setName(e.target.value)}
           value={name}
-          className='w-full max-w-[500px] px-3 py-2 border border-gray-300 rounded'
-          type='text'
-          placeholder='Enter product name'
+          onChange={(e) => setName(e.target.value)}
+          className="w-full max-w-lg px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
+          type="text"
+          placeholder="e.g. Silk Embroidered Saree"
           required
         />
       </div>
 
-      {/* Product Description */}
-      <div className='w-full'>
-        <p className='mb-2'>Product Description *</p>
+      {/* ── DESCRIPTION ── */}
+      <div className="w-full">
+        <p className="mb-1 font-medium text-gray-700">Description <span className="text-red-500">*</span></p>
         <textarea
-          onChange={(e) => setDescription(e.target.value)}
           value={description}
-          className='w-full max-w-[500px] px-3 py-2 border border-gray-300 rounded'
-          placeholder='Enter product description'
-          rows='3'
+          onChange={(e) => setDescription(e.target.value)}
+          className="w-full max-w-lg px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
+          rows="3"
+          placeholder="Describe the product, fabric, occasion…"
           required
         />
       </div>
 
-      {/* Price */}
-      <div className='w-full'>
-        <p className='mb-2'>Price (USD) *</p>
+      {/* ── PRICE ── */}
+      <div className="w-full">
+        <p className="mb-1 font-medium text-gray-700">Price (₹) <span className="text-red-500">*</span></p>
         <input
-          onChange={(e) => setPrice(e.target.value)}
           value={price}
-          className='w-full max-w-[500px] px-3 py-2 border border-gray-300 rounded'
-          type='number'
-          step='0.01'
-          placeholder='Enter price'
+          onChange={(e) => setPrice(e.target.value)}
+          className="w-40 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
+          type="number"
+          min="1"
+          step="1"
+          placeholder="0"
           required
         />
       </div>
 
-      {/* Category and SubCategory */}
-      <div className='flex flex-col sm:flex-row gap-2 w-full sm:gap-8'>
+      {/* ── CATEGORY / SUBCATEGORY ── */}
+      <div className="flex gap-6 flex-wrap">
         <div>
-          <p className='mb-2'>Category *</p>
+          <p className="mb-1 font-medium text-gray-700">Category</p>
           <select
-            onChange={(e) => setCategory(e.target.value)}
             value={category}
-            className='px-3 py-2 border border-gray-300 rounded'
+            onChange={(e) => setCategory(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
           >
             <option value="Women">Women</option>
             <option value="Men">Men</option>
             <option value="Kids">Kids</option>
           </select>
         </div>
-
         <div>
-          <p className='mb-2'>Sub Category *</p>
+          <p className="mb-1 font-medium text-gray-700">Sub Category</p>
           <select
-            onChange={(e) => setSubCategory(e.target.value)}
             value={subCategory}
-            className='px-3 py-2 border border-gray-300 rounded'
+            onChange={(e) => setSubCategory(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
           >
             <option value="Topwear">Topwear</option>
             <option value="Bottomwear">Bottomwear</option>
@@ -266,47 +250,63 @@ const Add = ({ token }) => {
         </div>
       </div>
 
-    
+      {/* ── STOCK PER SIZE ── */}
+      <div className="w-full">
+        <p className="mb-2 font-medium text-gray-700">Stock per Size</p>
+        <div className="flex gap-3 flex-wrap">
+          {Object.keys(stock).map((size) => (
+            <div key={size} className="flex flex-col items-center">
+              <label className="text-xs text-gray-500 mb-1 font-semibold">{size}</label>
+              <input
+                type="number"
+                min="0"
+                value={stock[size]}
+                onChange={(e) => handleStockChange(size, e.target.value)}
+                className="w-16 text-center px-2 py-1 border border-gray-300 rounded focus:outline-none focus:border-black text-sm"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
 
-      {/* Colors */}
-      <div className='w-full'>
-        <p className='mb-2'>Available Colors (comma-separated)</p>
+      {/* ── COLORS ── */}
+      <div className="w-full">
+        <p className="mb-1 font-medium text-gray-700">Available Colors</p>
         <input
-          onChange={(e) => setColors(e.target.value)}
           value={colors}
-          className='w-full max-w-[500px] px-3 py-2 border border-gray-300 rounded'
-          type='text'
-          placeholder='Red,Blue,Black,White'
+          onChange={(e) => setColors(e.target.value)}
+          className="w-full max-w-lg px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
+          type="text"
+          placeholder="Red, Blue, Black (comma-separated)"
         />
       </div>
 
-      
-
-      {/* Bestseller Checkbox */}
-      <div className='flex gap-2 mt-2'>
+      {/* ── BESTSELLER ── */}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
         <input
-          onChange={() => setBestseller(prev => !prev)}
+          type="checkbox"
           checked={bestseller}
-          type='checkbox'
-          id='bestseller'
+          onChange={() => setBestseller((p) => !p)}
+          className="w-4 h-4 accent-black"
         />
-        <label className='cursor-pointer' htmlFor="bestseller">
-          Mark as bestseller
-        </label>
-      </div>
+        <span className="text-gray-700">Mark as Bestseller</span>
+      </label>
 
-      {/* Submit Button */}
+      {/* ── SUBMIT ── */}
       <button
         type="submit"
-        disabled={uploadingImages}
-        className={`w-28 py-3 mt-4 rounded text-white font-semibold ${
-          uploadingImages
-            ? 'bg-gray-400 cursor-not-allowed'
+        disabled={submitting || !uploadDone}
+        className={`px-8 py-3 rounded font-semibold text-white transition-colors ${
+          submitting || !uploadDone
+            ? 'bg-gray-300 cursor-not-allowed'
             : 'bg-black hover:bg-gray-800'
         }`}
       >
-        {uploadingImages ? 'Uploading...' : 'ADD PRODUCT'}
+        {submitting ? 'Saving…' : 'Add Product'}
       </button>
+      {!uploadDone && (
+        <p className="text-xs text-amber-600">⚠ Upload images first, then submit.</p>
+      )}
     </form>
   );
 };
