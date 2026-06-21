@@ -1,12 +1,14 @@
 import express from 'express'
-import { listProducts,addProduct,removeProduct,singleProduct } from '../controllers/productController.js'
+import { listProducts, addProduct, removeProduct, singleProduct } from '../controllers/productController.js'
 import adminAuth from '../middleware/adminAuth.js'
-const productRouter = express.Router();
+import multer from 'multer'
 
-productRouter.post('/add',adminAuth,addProduct);
-productRouter.post('/remove',adminAuth,removeProduct);
-productRouter.post('/single',singleProduct);
-productRouter.get('/list',listProducts);
+const productRouter = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
+
+productRouter.post('/add', adminAuth, upload.none(), addProduct);  // upload.none() parses FormData fields with no files
+productRouter.post('/remove', adminAuth, removeProduct);
+productRouter.post('/single', singleProduct);
+productRouter.get('/list', listProducts);
 
 export default productRouter
-
